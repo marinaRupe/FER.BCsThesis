@@ -19,7 +19,7 @@ class DatabaseReducer:
         self.buildTaxonomyTree()
 
         self.parseMarkersFile("markers_info.txt", "notPairedClades.txt")
-        self.pairMarkers("markeri.out", "reducedDatabase.txt")
+        self.pairMarkers("markeri.out", "reducedDatabase.fa")
 
     def parseTaxonomyNamesFile(self, taxonomyNamesFile):
         print("Preparing taxonomy names...")
