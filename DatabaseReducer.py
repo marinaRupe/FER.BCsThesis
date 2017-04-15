@@ -2,6 +2,14 @@ import re
 import itertools
 from TaxonomyTree import TaxonomyTreeNode
 
+NAMES_FILE = "res/names.dmp"
+NODES_FILE = "res/nodes.dmp"
+STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
+MARKERS_FILE = "res/markers_info.txt"
+NOT_PAIRED_CLADES_FILE = "res/notPairedClades.txt"
+CODING_SEQUENCES_FILE = "res/markeri.out"
+REDUCED_DB_FILE = "reducedDatabase/reducedDatabase.fa"
+
 
 class DatabaseReducer:
     def __init__(self):
@@ -12,14 +20,14 @@ class DatabaseReducer:
         self.strainNames = dict()       # key = taxName
         self.markers = dict()           # key = GI, position
 
-        self.parseTaxonomyNamesFile("names.dmp")
-        self.parseStrainsAssemblyFile("assembly_summary_genbank_and_refseq.txt")
+        self.parseTaxonomyNamesFile(NAMES_FILE)
+        self.parseStrainsAssemblyFile(STRAINS_ASSEMBLY_FILE)
 
-        self.parseTaxonomyNodesFile("nodes.dmp")
+        self.parseTaxonomyNodesFile(NODES_FILE)
         self.buildTaxonomyTree()
 
-        self.parseMarkersFile("markers_info.txt", "notPairedClades.txt")
-        self.pairMarkers("markeri.out", "reducedDatabase.fa")
+        self.parseMarkersFile(MARKERS_FILE, NOT_PAIRED_CLADES_FILE)
+        self.pairMarkers(CODING_SEQUENCES_FILE, REDUCED_DB_FILE)
 
     def parseTaxonomyNamesFile(self, taxonomyNamesFile):
         print("Preparing taxonomy names...")
@@ -105,7 +113,7 @@ class DatabaseReducer:
                     parentTaxNode.addChild(taxNode)
 
         self.printNodesStatistic()
-        self.taxonomyNames.clear()
+        # self.taxonomyNames.clear()
         self.taxonomyRanks.clear()
         print("---Done.")
 
@@ -176,11 +184,11 @@ class DatabaseReducer:
         self.taxonomyNodes.clear()
         print("---Done.")
 
-    def pairMarkers(self, markersFile, reducedDatabase):
+    def pairMarkers(self, codingSequencesFile, reducedDatabase):
         print("Pairing markers...")
         paired, notPaired = 0, 0
 
-        with open(markersFile, 'r') as f, open(reducedDatabase, 'w') as db:
+        with open(codingSequencesFile, 'r') as f, open(reducedDatabase, 'w') as db:
             for line1, line2 in itertools.zip_longest(*[f] * 2):
                 marker = line1.strip().split("\t")
                 GI = marker[0].split("|")[1]
@@ -189,7 +197,15 @@ class DatabaseReducer:
                 TIs = self.markers.get((GI, position), None)
                 self.markers.pop((GI, position), None)
 
+                # check if there is a name for a taxID
+
                 if (TIs is not None) and len(TIs) != 0:
+                    namedTIs = []
+                    for taxId in TIs:
+                        if self.taxIdHasName(taxId):
+                            namedTIs.append(taxId)
+                    TIs = namedTIs
+
                     paired += 1
                     db.write(">gi|" + GI + "|ti|" + ",".join(TIs) + "\n")
                     db.write(line2.strip() + "\n")
@@ -197,6 +213,7 @@ class DatabaseReducer:
                     notPaired += 1
 
         self.printPairingMarkersStatistics(paired, notPaired)
+        self.taxonomyNames.clear()
         self.markers.clear()
         print("---Done.")
 
@@ -224,6 +241,10 @@ class DatabaseReducer:
             notSpeciesNodes = newNotSpeciesNodes
 
         return speciesNodes
+
+    def taxIdHasName(self, taxId):
+        name = self.taxonomyNames.get(taxId, None)
+        return name is not None
 
     # print statistics
     def printNodesStatistic(self):

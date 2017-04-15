@@ -6,6 +6,21 @@ __pycache__/
 # C extensions
 *.so
 
+# User-specific stuff:
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+
+# Sensitive or high-churn files:
+.idea/dataSources.ids
+.idea/dataSources.xml
+.idea/dataSources.local.xml
+.idea/sqlDataSources.xml
+.idea/dynamic.xml
+.idea/uiDesigner.xml
+
 # Distribution / packaging
 .Python
 env/
@@ -89,11 +104,6 @@ ENV/
 .ropeproject
 
 # Generated files
-reducedDatabase.txt
-notPairedClades.txt
-nodes.dmp
-names.dmp
-markers_info.txt
-markeri.out
-assembly_summary_genbank_and_refseq.txt
-statistics.sh
+res/
+reducedDatabase/
+alignments/
