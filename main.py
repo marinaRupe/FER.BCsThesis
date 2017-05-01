@@ -9,11 +9,11 @@ STAPHILOCCOCUS_NEW = "alignments/new/alignments_staphi"
 SALMONELLA_NEW = "alignments/new/alignments_salmonella"
 KLEBSIELLA_NEW = "alignments/new/alignments_klebsiella"
 
-STAPHILOCCOCUS2 = "alignments/Ivan/outs/Staphi_x1.out"
-SALMONELLA2 = "alignments/Ivan/outs/salmonella_x1.out"
-KLEBSIELLA2 = "alignments/Ivan/outs/klebsiella_x1.fastq.out"
+STAPHILOCCOCUS_TEST = "alignments/test/outs/staphi"
+SALMONELLA_TEST = "alignments/test/outs/salmonella"
+KLEBSIELLA_TEST = "alignments/test/outs/klebsiella"
 
-INPUT_FILE = KLEBSIELLA + "_x1.sam"
+INPUT_FILE = KLEBSIELLA_TEST + "_x1.sam"
 
 #DatabaseReducer().generate()
 EM = EMAlgorithm().start(INPUT_FILE)
