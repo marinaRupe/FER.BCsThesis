@@ -13,11 +13,12 @@ class EMAlgorithm:
         self.a_list = list()
         self.b_list = list()
         self.y_list = list()
+        self.result = None
 
     def start(self, alignmentsFile):
         self.calculateInitialParameters(alignmentsFile)
-        result = self.getResult()
-        self.printResult(result)
+        self.result = self.getResult()
+        self.printResult(self.result)
 
     def calculateInitialParameters(self, alignmentsFile):
         self.reads = list()
@@ -30,6 +31,9 @@ class EMAlgorithm:
         max_MAPQ = 0
         map_freq = dict()
         sum_map_freq = 0
+
+        unique = dict()
+        non_unique = dict()
 
         with open(alignmentsFile) as alignFile:
             print("Analyzing...")
@@ -51,6 +55,11 @@ class EMAlgorithm:
                             genomes.add(TI)
                             map_freq[TI] = map_freq.get(TI, 0) + 1
                             sum_map_freq += 1
+
+                            if len(TIs) == 1:
+                                unique[TI] = unique.get(TI, 0) + 1
+                            else:
+                                non_unique[TI] = non_unique.get(TI, 0) + 1
 
                         if len(TIs) == 1:
                             self.y_list.append(1)
@@ -79,13 +88,18 @@ class EMAlgorithm:
         self.pi_list = list()
         self.delta_list = list()
         avg_map_freq = sum_map_freq / len(map_freq)
+        pi0 = delta0 = 1.0/len(self.genomes)
+
         for i in range(len(self.genomes)):
             freq = map_freq[self.genomes[i]]
-            self.a_list.append(freq)
-            self.b_list.append(freq)
+            unique_reads = unique.get(self.genomes[i], 0)
+            non_unique_reads = non_unique.get(self.genomes[i], 0)
 
-            self.pi_list.append(1.0/len(self.genomes))
-            self.delta_list.append(1.0/len(self.genomes))
+            self.a_list.append(freq + unique_reads)
+            self.b_list.append(freq + non_unique_reads)
+
+            self.pi_list.append(pi0)
+            self.delta_list.append(delta0)
 
     def getResult(self):
         finished = False
@@ -143,6 +157,10 @@ class EMAlgorithm:
         for i in range(N):
             print("{}. {}".format(i + 1, names[i]))
             print("     {:10}  {:>.8}".format(result[i][1], result[i][0]))
+            if result[i][1] == '28901':
+                print("Yes")
+
+        return TIs
 
     def EStep(self):
         # expectation of parameters

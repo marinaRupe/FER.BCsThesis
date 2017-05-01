@@ -9,23 +9,22 @@ MARKERS_FILE = "res/markers_info.txt"
 NOT_PAIRED_CLADES_FILE = "res/notPairedClades.txt"
 CODING_SEQUENCES_FILE = "res/markeri.out"
 REDUCED_DB_FILE = "reducedDatabase/reducedDatabase.fa"
+NODES_STATS_FILE = "res/nodes_stats.txt"
 
 
 class DatabaseReducer:
     def __init__(self):
         self.taxonomyNames = dict()     # key = TI
-        self.taxonomyRanks = dict()     # key = rank
-        self.taxonomyNodes = dict()     # key = taxName
+        self.taxIDFromName = dict()     # key = taxName
+        self.taxNodes = dict()          # key = taxName
         self.strainAssemblies = dict()  # key = assembly
         self.strainNames = dict()       # key = taxName
         self.markers = dict()           # key = GI, position
 
+    def generate(self):
         self.parseTaxonomyNamesFile(NAMES_FILE)
         self.parseStrainsAssemblyFile(STRAINS_ASSEMBLY_FILE)
-
         self.parseTaxonomyNodesFile(NODES_FILE)
-        self.buildTaxonomyTree()
-
         self.parseMarkersFile(MARKERS_FILE, NOT_PAIRED_CLADES_FILE)
         self.pairMarkers(CODING_SEQUENCES_FILE, REDUCED_DB_FILE)
 
@@ -35,9 +34,10 @@ class DatabaseReducer:
         with open(taxonomyNamesFile) as namesFile:
             for line in namesFile:
                 taxName = line.split('|')
-                taxId = taxName[0].strip()
+                TI = taxName[0].strip()
                 name = re.sub('[^0-9a-zA-Z]+', '_', taxName[1].strip())
-                self.taxonomyNames[taxId] = name
+                self.taxonomyNames[TI] = name
+                self.taxIDFromName[name] = TI
 
         print("---Done.")
 
@@ -47,13 +47,9 @@ class DatabaseReducer:
         with open(taxonomyNodesFile) as nodesFile:
             for line in nodesFile:
                 node = line.split('|')
-                taxId, parentTaxId, rank = node[0].strip(), node[1].strip(), node[2].strip()
-                taxName = self.taxonomyNames[taxId]
-
-                if rank not in self.taxonomyRanks:
-                    self.taxonomyRanks[rank] = [(taxId, parentTaxId, taxName)]
-                else:
-                    self.taxonomyRanks[rank].append((taxId, parentTaxId, taxName))
+                TI, parentTaxId, rank = node[0].strip(), node[1].strip(), node[2].strip()
+                taxName = self.taxonomyNames[TI]
+                self.addToTaxonomyTree(TI, parentTaxId, taxName, rank)
 
         print("---Done.")
 
@@ -78,44 +74,22 @@ class DatabaseReducer:
         self.strainAssemblies['GCF_000335395'] = '1262663'
         print("---Done.")
 
-    def buildTaxonomyTree(self):
-        print("Building taxonomy tree...")
+    def addToTaxonomyTree(self, TI, parentTI, taxName, rank):
+        if parentTI in self.taxNodes:
+            parentNode = self.taxNodes[parentTI]
+        else:
+            parentNode = TaxonomyTreeNode(parentTI, None, self.taxonomyNames.get(parentTI, None), None)
 
-        for rank in self.taxonomyRanks:
-            taxes = self.taxonomyRanks[rank]
+        if TI in self.taxNodes:
+            taxNode = self.taxNodes[TI]
+            if taxNode.rank is None or taxNode.rank == "no rank":
+                taxNode.rank = rank
+        else:
+            taxNode = TaxonomyTreeNode(TI, parentNode, taxName, rank)
 
-            for tax in taxes:
-                taxId, parentTaxId, taxName = tax
-                parentName = self.taxonomyNames.get(parentTaxId, None)
-
-                # if there's no name for the parent, there is no parent node
-                if parentName is None:
-                    parentTaxNode = None
-                else:
-                    parentTaxNode = self.taxonomyNodes.get(parentName, None)
-
-                    # if there's no node for the parent - create it
-                    if parentTaxNode is None:
-                        parentTaxNode = TaxonomyTreeNode(parentTaxId, None, parentName, None)
-                        self.taxonomyNodes[parentName] = parentTaxNode
-
-                taxNode = TaxonomyTreeNode(taxId, parentTaxNode, taxName, rank)
-
-                node = self.taxonomyNodes.get(taxName, "Not existing node")
-                if node == "Not existing node":
-                    self.taxonomyNodes[taxName] = taxNode
-                else:
-                    for child in node.children:
-                        taxNode.addChild(child)
-                    self.taxonomyNodes[taxName] = taxNode
-
-                if parentTaxNode is not None:
-                    parentTaxNode.addChild(taxNode)
-
-        self.printNodesStatistic()
-        # self.taxonomyNames.clear()
-        self.taxonomyRanks.clear()
-        print("---Done.")
+        parentNode.addChild(taxNode)
+        self.taxNodes[parentTI] = parentNode
+        self.taxNodes[TI] = taxNode
 
     def parseMarkersFile(self, markersFile, notPairedCladesFile):
         print("Preparing markers...")
@@ -130,26 +104,27 @@ class DatabaseReducer:
                     GI = giInfo.split('|')[1]
                     position = giInfo.split('|')[-1].replace(':', '')
                     info = eval(marker[1])
-                    ext = info["ext"]
-                    clade = info["clade"].strip()
+                    clade, ext = info["clade"].strip(), info["ext"]
                     rank, cladeName = clade.split('__')[0], clade.split('__')[1]
-                    taxNode = self.taxonomyNodes.get(cladeName, None)
+
+                    cladeTI = self.taxIDFromName.get(cladeName, "not found")
+                    taxNode = self.taxNodes.get(cladeTI, None)
 
                     if taxNode is not None:
                         # if rank is not species, make clade to species level
                         if rank != 's':
-                            speciesTIs = self.getSpecies(taxNode) + self.getTIsFromExt(ext)
+                            speciesTIs = self.getSpecies(taxNode) | self.getTIsFromExt(ext)
                         else:
-                            speciesTIs = [taxNode.taxId] + self.getTIsFromExt(ext)
+                            speciesTIs = self.getTIsFromExt(ext) | {taxNode.taxId}
 
                         self.markers[GI, position] = speciesTIs
 
                     else:
                         # if clade name is strain assembly
                         if rank == 't':
-                            taxId = self.strainAssemblies.get(cladeName, None)
-                            if taxId is not None:
-                                speciesTIs = [taxId] + self.getTIsFromExt(ext)
+                            TI = self.strainAssemblies.get(cladeName, None)
+                            if TI is not None:
+                                speciesTIs = self.getTIsFromExt(ext) | {TI}
                                 self.markers[GI, position] = speciesTIs
 
                             else:
@@ -163,9 +138,9 @@ class DatabaseReducer:
 
                         else:
                             # try with strain names
-                            taxId = self.strainNames.get(cladeName, None)
-                            if taxId is not None:
-                                speciesTIs = [taxId] + self.getTIsFromExt(ext)
+                            TI = self.strainNames.get(cladeName, None)
+                            if TI is not None:
+                                speciesTIs = self.getTIsFromExt(ext) | {TI}
                                 self.markers[GI, position] = speciesTIs
 
                             else:
@@ -179,9 +154,12 @@ class DatabaseReducer:
                                     markersWithNoTIs += 1
 
         self.printMarkersStatistics(markersWithNoTIs)
+        self.printNodesStatistic()
+
         self.strainAssemblies.clear()
         self.strainNames.clear()
-        self.taxonomyNodes.clear()
+        self.taxNodes.clear()
+        self.taxIDFromName.clear()
         print("---Done.")
 
     def pairMarkers(self, codingSequencesFile, reducedDatabase):
@@ -197,15 +175,7 @@ class DatabaseReducer:
                 TIs = self.markers.get((GI, position), None)
                 self.markers.pop((GI, position), None)
 
-                # check if there is a name for a taxID
-
                 if (TIs is not None) and len(TIs) != 0:
-                    namedTIs = []
-                    for taxId in TIs:
-                        if self.taxIdHasName(taxId):
-                            namedTIs.append(taxId)
-                    TIs = namedTIs
-
                     paired += 1
                     db.write(">gi|" + GI + "|ti|" + ",".join(TIs) + "\n")
                     db.write(line2.strip() + "\n")
@@ -223,24 +193,44 @@ class DatabaseReducer:
             TI = self.strainAssemblies.get(assembly, None)
             if TI is not None:
                 TIs.add(TI)
-        return list(TIs)
+        return TIs
+
+    @staticmethod
+    def getAllChildNodes(taxNode):
+        new_child_nodes = taxNode.children
+        TIs = set()
+
+        while new_child_nodes:
+            child_nodes = new_child_nodes
+            new_child_nodes = []
+            for child in child_nodes:
+                TIs.add(child.taxId)
+                new_child_nodes += child.children
+
+        return TIs
 
     @staticmethod
     def getSpecies(taxNode):
         # find children on species level
-        notSpeciesNodes, speciesNodes = [taxNode], []
+        if taxNode.rank == "genus":
+            return DatabaseReducer.getAllChildNodes(taxNode)
+
+        speciesTIs = set()
+        notSpeciesNodes = [taxNode]
         while len(notSpeciesNodes) > 0:
             newNotSpeciesNodes = []
             for node in notSpeciesNodes:
-                if node.hasChildren:
+                if node.rank == "genus":
+                    speciesTIs.update(DatabaseReducer.getAllChildNodes(node))
+                elif node.hasChildren:
                     for child in node.children:
-                        if child.rank == "species":
-                            speciesNodes.append(child.taxId)
+                        if child.rank == "species" or child.rank == "subspecies":
+                            speciesTIs.add(child.taxId)
                         else:
                             newNotSpeciesNodes.append(child)
             notSpeciesNodes = newNotSpeciesNodes
 
-        return speciesNodes
+        return speciesTIs
 
     def taxIdHasName(self, taxId):
         name = self.taxonomyNames.get(taxId, None)
@@ -249,8 +239,26 @@ class DatabaseReducer:
     # print statistics
     def printNodesStatistic(self):
         print("\t\tNames count: " + str(len(self.taxonomyNames)))
-        print("\t\tNodes count: " + str(len(self.taxonomyNodes)))
-        print("\t\tNames without nodes: " + str(len(self.taxonomyNames) - len(self.taxonomyNodes)))
+        print("\t\tNodes count: " + str(len(self.taxNodes)))
+        print("\t\tNames without nodes: " + str(len(self.taxonomyNames) - len(self.taxNodes)))
+        # self.saveTaxNodes()
+
+    def saveTaxNodes(self):
+        with open(NODES_STATS_FILE, 'w') as ns:
+            node = self.taxNodes['1']
+            ns.write(node.taxId + " " + node.name + "\n")
+            new_list = node.children
+            counter = space_count = 1
+            while new_list:
+                old_list = new_list
+                new_list = []
+                for child in old_list:
+                    space = " " * space_count
+                    ns.write(space + child.taxId + " " + child.name + " (" + child.rank + ")" + "\n")
+                    new_list += child.children
+                    counter += 1
+                space_count += 1
+            print("\t\tChildren counter (from organism with TI 1): ", counter)
 
     def printMarkersStatistics(self, markersWithNoTIsCount):
         if markersWithNoTIsCount > 0:
@@ -261,4 +269,3 @@ class DatabaseReducer:
         print("\t\tPaired: " + str(pairedCount))
         print("\t\tNot paired sequences: " + str(notPairedCount))
         print("\t\tNot paired markers: " + str(len(self.markers)))
-

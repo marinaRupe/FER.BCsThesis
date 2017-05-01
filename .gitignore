@@ -107,3 +107,4 @@ ENV/
 res/
 reducedDatabase/
 alignments/
+old/

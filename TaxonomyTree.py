@@ -10,5 +10,8 @@ class TaxonomyTreeNode(object):
     def addChild(self, child):
         self.children.append(child)
 
+    def setChildren(self, children):
+        self.children = children
+
     def hasChildren(self):
         return len(self.children) > 0
