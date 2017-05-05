@@ -14,12 +14,12 @@ NODES_STATS_FILE = "res/nodes_stats.txt"
 
 class DatabaseReducer:
     def __init__(self):
-        self.taxonomyNames = dict()     # key = TI
-        self.taxIDFromName = dict()     # key = taxName
-        self.taxNodes = dict()          # key = taxName
-        self.strainAssemblies = dict()  # key = assembly
-        self.strainNames = dict()       # key = taxName
-        self.markers = dict()           # key = GI, position
+        self.taxonomyNames = {}     # key = TI
+        self.taxIDFromName = {}     # key = taxName
+        self.taxNodes = {}          # key = taxName
+        self.strainAssemblies = {}  # key = assembly
+        self.strainNames = {}       # key = taxName
+        self.markers = {}           # key = GI, position
 
     def generate(self):
         self.parseTaxonomyNamesFile(NAMES_FILE)

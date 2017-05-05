@@ -1,94 +1,110 @@
 import math
 
 NAMES_FILE = "res/names.dmp"
+NODES_FILE = "res/nodes.dmp"
 STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
+
 
 class EMAlgorithm:
     def __init__(self):
-        self.reads = list()
-        self.genomes = list()
-        self.pi_list = list()
-        self.delta_list = list()
-        self.q_list = list()
-        self.a_list = list()
-        self.b_list = list()
-        self.y_list = list()
-        self.result = None
+        self.reads, self.genomes = [], []
+        self.pi_list, self.delta_list = [], []
+        self.a_list, self.b_list = [], []
+        self.q_list = []
+        self.y_list = []
+        self.groups = {}       # key - TI
+        self.parentTIs = {}    # key - TI (get parent TI by organism TI)
 
     def start(self, alignmentsFile):
-        self.calculateInitialParameters(alignmentsFile)
-        self.result = self.getResult()
-        self.printResult(self.result)
+        # First substep
+        alignments = self.calculateInitialParameters(alignmentsFile)
+        result = self.getResult()
+        print("\nFirst result:\n")
+        self.printResult(result)
+        bestTIs = self.getBestTIsPerGroup(result)
 
-    def calculateInitialParameters(self, alignmentsFile):
-        self.reads = list()
-        self.a_list = list()
-        self.b_list = list()
-        self.y_list = list()
+        # Second substep
+        self.calculateInitialParameters(alignmentsFile, alignments, bestTIs)
+        result = self.getResult()
+        print("\nFinal result:\n")
+        self.printResult(result)
+
+    def calculateInitialParameters(self, alignmentsFile, alignments={}, bestTIs=[]):
+        IS_SECOND_STEP = bool(alignments)
+        self.reads, self.a_list, self.b_list, self.y_list = [], [], [], []
+        q_dict, map_freq, unique, non_unique = {}, {}, {}, {}
         genomes = set()
-        alignments = dict()
-        q_dict = dict()
-        max_MAPQ = 0
-        map_freq = dict()
-        sum_map_freq = 0
+        maxScore = 0
 
-        unique = dict()
-        non_unique = dict()
+        if not IS_SECOND_STEP:
+            print("\nSetting the initial parameters...")
+            with open(alignmentsFile) as alignFile:
+                for line in alignFile:
+                    if not line.startswith('@'):
+                        fields = line.strip().split("\t")
+                        QNAME = fields[0]
+                        RNAME = fields[2]  # reference marker gene
 
-        with open(alignmentsFile) as alignFile:
-            print("Analyzing...")
-            for line in alignFile:
-                if not line.startswith('@'):
-                    fields = line.strip().split("\t")
-                    QNAME = fields[0]
-                    RNAME = fields[2]  # reference marker gene
-                    MAPQ = int(fields[4])  # mapping quality (if 255 - not avaliable)
+                        if RNAME != "*":
+                            # calculate score
+                            CIGAR = fields[5]
+                            matches = n = 0
+                            num = ''
+                            for i in range(len(CIGAR)):
+                                c = CIGAR[i]
+                                if c.isdigit():
+                                    num += c
+                                else:
+                                    if c == 'M':
+                                        matches += int(num)
+                                    n += int(num)
+                                    num = ''
+                            score = n / matches
 
-                    # if read is paired
-                    if RNAME != "*":
-                        TIs = RNAME.split("|")[3].split(",")
+                            TIs = RNAME.split("|")[3].split(",")
+                            alignments[QNAME] = TIs, score
+        else:
+            print("Resetting the parameters...")
 
-                        alignments[QNAME] = list(TIs)
-                        self.reads.append(QNAME)
+        for read in alignments:
+            self.reads.append(read)
+            TIs, score = alignments[read][0], alignments[read][1]
 
-                        for TI in TIs:
-                            genomes.add(TI)
-                            map_freq[TI] = map_freq.get(TI, 0) + 1
-                            sum_map_freq += 1
+            if score > maxScore:
+                maxScore = score
 
-                            if len(TIs) == 1:
-                                unique[TI] = unique.get(TI, 0) + 1
-                            else:
-                                non_unique[TI] = non_unique.get(TI, 0) + 1
+            if IS_SECOND_STEP:
+                TIsLeft = []
+                for TI in TIs:
+                    if TI in bestTIs:
+                        TIsLeft.append(TI)
+                TIs = TIsLeft
 
-                        if len(TIs) == 1:
-                            self.y_list.append(1)
-                        else:
-                            self.y_list.append(0)
+            for TI in TIs:
+                genomes.add(TI)
+                q_dict[read, TI] = score
+                map_freq[TI] = map_freq.get(TI, 0) + 1
 
-                        for TI in TIs:
-                            q_dict[QNAME, TI] = MAPQ
+                if len(TIs) == 1:
+                    unique[TI] = unique.get(TI, 0) + 1
+                else:
+                    non_unique[TI] = non_unique.get(TI, 0) + 1
 
-                        if MAPQ > max_MAPQ:
-                            max_MAPQ = MAPQ
-
-                    else:
-                        alignments[QNAME] = list()
+            if len(TIs) == 1:
+                self.y_list.append(1)
+            else:
+                self.y_list.append(0)
 
         self.genomes = list(genomes)
-        self.q_list = list()
-
+        self.q_list = []
         for i in range(len(self.reads)):
-            q_list_for_read = list()
+            q_list_for_read = []
             for j in range(len(self.genomes)):
-                q_list_for_read.append(math.exp(q_dict.get((self.reads[i], self.genomes[j]), 0) / max_MAPQ))
+                q_list_for_read.append(math.exp(q_dict.get((self.reads[i], self.genomes[j]), 0) / maxScore))
             self.q_list.append(q_list_for_read)
 
-        # TODO:
-        self.pi_list = list()
-        self.delta_list = list()
-        avg_map_freq = sum_map_freq / len(map_freq)
-        pi0 = delta0 = 1.0/len(self.genomes)
+        self.pi_list, self.delta_list = [], []
+        pi0 = delta0 = 1.0 / len(self.genomes)
 
         for i in range(len(self.genomes)):
             freq = map_freq[self.genomes[i]]
@@ -101,12 +117,52 @@ class EMAlgorithm:
             self.pi_list.append(pi0)
             self.delta_list.append(delta0)
 
+        return alignments
+
+    def getBestTIsPerGroup(self, result):
+        print("\nGetting the best TIs per group...")
+        with open(NODES_FILE) as nodesFile:
+            for line in nodesFile:
+                node = line.split('|')
+                TI, parentTI = node[0].strip(), node[1].strip()
+                if TI in self.genomes:
+
+                    genome = [r[0] for r in result if r[1] == TI][0], TI
+                    self.groups.setdefault(parentTI, []).append(genome)
+                    self.parentTIs[TI] = parentTI
+
+        noParentCount = 0
+        for TI in self.genomes:
+            if TI not in self.parentTIs:
+                noParentCount += 1
+                # TODO
+                genome = [r[0] for r in result if r[1] == TI][0], TI
+                self.groups.setdefault(TI, []).append(genome)
+                self.parentTIs[TI] = TI
+
+        print(str(noParentCount) + " TIs has no parent!")
+
+        bestTIs = []
+        for group in self.groups:
+            genomes = self.groups[group]
+            maxProp, maxTI = 0, None
+
+            for genome in genomes:
+                prop, TI = genome[0], genome[1]
+                if prop > maxProp:
+                    maxProp = prop
+                    maxTI = TI
+
+            bestTIs.append(maxTI)
+
+        return bestTIs
+
     def getResult(self):
         finished = False
         log_likelihood = None
         epsilon = pow(10, -10)
         while not finished:
-            print("Current solution:" + str(self.pi_list[:20]))
+            # print("Current solution:" + str(self.pi_list[:20]))
             h, N = self.EStep()
             new_pi_list, new_delta_list = self.MStep(h, N)
             new_log_likelihood = self.calculateLogLikelihood()
@@ -126,11 +182,10 @@ class EMAlgorithm:
                     break
 
             if not finished:
-                self.pi_list = new_pi_list
-                self.delta_list = new_delta_list
+                self.pi_list, self.delta_list = new_pi_list, new_delta_list
 
         sum_pi = sum(self.pi_list)
-        solution = list()
+        solution = []
         for i in range(len(self.genomes)):
             solution.append((self.pi_list[i] / sum_pi, self.genomes[i]))
 
@@ -143,7 +198,6 @@ class EMAlgorithm:
         names = [NO_NAME for i in range(N)]
         TIs = [genome[1] for genome in result[:N]]
 
-        print("\nFinal result:\n")
         with open(NAMES_FILE) as namesFile:
             for line in namesFile:
                 taxName = line.split('|')
@@ -220,7 +274,7 @@ class EMAlgorithm:
 
             log_likelihood += math.log(inner_sum)
 
-        print("Log-likelihood: " + str(log_likelihood))
+        # print("Log-likelihood: " + str(log_likelihood))
         return log_likelihood
 
     @staticmethod
