@@ -8,7 +8,7 @@ STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
 MARKERS_FILE = "res/markers_info.txt"
 NOT_PAIRED_CLADES_FILE = "res/notPairedClades.txt"
 CODING_SEQUENCES_FILE = "res/markeri.out"
-REDUCED_DB_FILE = "reducedDatabase/reducedDatabase.fa"
+REDUCED_DB_FILE = "reducedDatabase/reducedDatabase3.fa"
 NODES_STATS_FILE = "res/nodes_stats.txt"
 
 
@@ -204,7 +204,8 @@ class DatabaseReducer:
             child_nodes = new_child_nodes
             new_child_nodes = []
             for child in child_nodes:
-                TIs.add(child.taxId)
+                if child.rank == "species":
+                    TIs.add(child.taxId)
                 new_child_nodes += child.children
 
         return TIs
@@ -224,7 +225,7 @@ class DatabaseReducer:
                     speciesTIs.update(DatabaseReducer.getAllChildNodes(node))
                 elif node.hasChildren:
                     for child in node.children:
-                        if child.rank == "species" or child.rank == "subspecies":
+                        if child.rank == "species":
                             speciesTIs.add(child.taxId)
                         else:
                             newNotSpeciesNodes.append(child)

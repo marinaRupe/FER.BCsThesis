@@ -13,7 +13,7 @@ STAPHILOCCOCUS_TEST = "alignments/test/outs/staphi"
 SALMONELLA_TEST = "alignments/test/outs/salmonella"
 KLEBSIELLA_TEST = "alignments/test/outs/klebsiella"
 
-INPUT_FILE = KLEBSIELLA_TEST + "_x1.sam"
+INPUT_FILE = SALMONELLA + "_x1.sam"
 
 #DatabaseReducer().generate()
 EM = EMAlgorithm().start(INPUT_FILE)

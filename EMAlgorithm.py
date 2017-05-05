@@ -1,7 +1,7 @@
 import math
 
 NAMES_FILE = "res/names.dmp"
-
+STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
 
 class EMAlgorithm:
     def __init__(self):
@@ -152,13 +152,24 @@ class EMAlgorithm:
                 if TI in TIs:
                     if names[TIs.index(TI)] == NO_NAME:
                         name = taxName[1].strip()
-                        names[TIs.index(TI)] = name
+                        isScientific = taxName[3].strip() == "scientific name"
+                        if isScientific:
+                            names[TIs.index(TI)] = name
+
+        if NO_NAME in names:
+            with open(STRAINS_ASSEMBLY_FILE) as aFile:
+                for line in aFile:
+                    if not line.startswith('#'):
+                        data = line.split('\t')
+                        TI, organismName = data[6].strip(), data[7].strip()
+
+                        if TI in TIs:
+                            if names[TIs.index(TI)] == NO_NAME:
+                                names[TIs.index(TI)] = organismName
 
         for i in range(N):
             print("{}. {}".format(i + 1, names[i]))
             print("     {:10}  {:>.8}".format(result[i][1], result[i][0]))
-            if result[i][1] == '28901':
-                print("Yes")
 
         return TIs
 
