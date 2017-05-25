@@ -1,8 +1,5 @@
 import math
-
-NAMES_FILE = "res/names.dmp"
-NODES_FILE = "res/nodes.dmp"
-STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
+from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE
 
 
 class EMAlgorithm:
@@ -121,26 +118,19 @@ class EMAlgorithm:
 
     def getBestTIsPerGroup(self, result):
         print("\nGetting the best TIs per group...")
-        with open(NODES_FILE) as nodesFile:
+        with open(NODES_FILE, 'r') as nodesFile:
             for line in nodesFile:
-                node = line.split('|')
+                node = line.strip().split('\t|\t')
                 TI, parentTI = node[0].strip(), node[1].strip()
-                if TI in self.genomes:
 
+                if TI in self.genomes:
                     genome = [r[0] for r in result if r[1] == TI][0], TI
                     self.groups.setdefault(parentTI, []).append(genome)
                     self.parentTIs[TI] = parentTI
 
-        noParentCount = 0
-        for TI in self.genomes:
-            if TI not in self.parentTIs:
-                noParentCount += 1
-                # TODO
-                genome = [r[0] for r in result if r[1] == TI][0], TI
-                self.groups.setdefault(TI, []).append(genome)
-                self.parentTIs[TI] = TI
-
-        print(str(noParentCount) + " TIs has no parent!")
+                # if parents are found for all TIs
+                if len(self.parentTIs) == len(self.genomes):
+                    break
 
         bestTIs = []
         for group in self.groups:
@@ -158,23 +148,23 @@ class EMAlgorithm:
         return bestTIs
 
     def getResult(self):
+        EPSILON = pow(10, -8)
         finished = False
         log_likelihood = None
-        epsilon = pow(10, -10)
+
         while not finished:
-            # print("Current solution:" + str(self.pi_list[:20]))
             h, N = self.EStep()
             new_pi_list, new_delta_list = self.MStep(h, N)
             new_log_likelihood = self.calculateLogLikelihood()
 
-            convergency_of_log_likelihood = (log_likelihood is not None) and (abs(new_log_likelihood - log_likelihood) < epsilon)
+            convergency_of_log_likelihood = (log_likelihood is not None) and (abs(new_log_likelihood - log_likelihood) < EPSILON)
             log_likelihood = new_log_likelihood
 
             # check if algorithm converges
             finished = False
             for i in range(len(self.pi_list)):
-                conv_pi = abs(new_pi_list[i] - self.pi_list[i]) < epsilon
-                conv_delta = abs(new_delta_list[i] - self.delta_list[i]) < epsilon
+                conv_pi = abs(new_pi_list[i] - self.pi_list[i]) < EPSILON
+                conv_delta = abs(new_delta_list[i] - self.delta_list[i]) < EPSILON
                 convergency_of_parameters = conv_pi and conv_delta
 
                 if convergency_of_parameters or convergency_of_log_likelihood:
@@ -194,6 +184,7 @@ class EMAlgorithm:
     @staticmethod
     def printResult(result):
         N = 5
+        SCIENTIFIC_NAME = "scientific name"
         NO_NAME = "(no name found)"
         names = [NO_NAME for i in range(N)]
         TIs = [genome[1] for genome in result[:N]]
@@ -206,9 +197,12 @@ class EMAlgorithm:
                 if TI in TIs:
                     if names[TIs.index(TI)] == NO_NAME:
                         name = taxName[1].strip()
-                        isScientific = taxName[3].strip() == "scientific name"
+                        isScientific = taxName[3].strip() == SCIENTIFIC_NAME
                         if isScientific:
                             names[TIs.index(TI)] = name
+
+                if NO_NAME not in names:
+                    break
 
         if NO_NAME in names:
             with open(STRAINS_ASSEMBLY_FILE) as aFile:
@@ -220,6 +214,9 @@ class EMAlgorithm:
                         if TI in TIs:
                             if names[TIs.index(TI)] == NO_NAME:
                                 names[TIs.index(TI)] = organismName
+
+                    if NO_NAME not in names:
+                        break
 
         for i in range(N):
             print("{}. {}".format(i + 1, names[i]))
@@ -250,7 +247,7 @@ class EMAlgorithm:
         for j in range(len(self.genomes)):
             h_j_sum_by_reads = 0
             h_j_with_y_sum_by_reads = 0
-            y_sum = 0  # TODO: izdvoji
+            y_sum = 0
 
             for i in range(len(self.reads)):
                 h_j_sum_by_reads += h[i][j]
@@ -267,14 +264,13 @@ class EMAlgorithm:
 
     def calculateLogLikelihood(self):
         log_likelihood = 0
+
         for i in range(len(self.reads)):
             inner_sum = 0
             for j in range(len(self.genomes)):
                 inner_sum += self.pi_list[j] * (pow(self.delta_list[j], 1 - self.y_list[i]) * self.q_list[i][j])
-
             log_likelihood += math.log(inner_sum)
 
-        # print("Log-likelihood: " + str(log_likelihood))
         return log_likelihood
 
     @staticmethod

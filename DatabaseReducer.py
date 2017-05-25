@@ -1,15 +1,9 @@
-import re
 import itertools
-from TaxonomyTree import TaxonomyTreeNode
+import re
 
-NAMES_FILE = "res/names.dmp"
-NODES_FILE = "res/nodes.dmp"
-STRAINS_ASSEMBLY_FILE = "res/assembly_summary_genbank_and_refseq.txt"
-MARKERS_FILE = "res/markers_info.txt"
-NOT_PAIRED_CLADES_FILE = "res/notPairedClades.txt"
-CODING_SEQUENCES_FILE = "res/markeri.out"
-REDUCED_DB_FILE = "reducedDatabase/reducedDatabase3.fa"
-NODES_STATS_FILE = "res/nodes_stats.txt"
+from TaxonomyTree import TaxonomyTreeNode
+from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE, MARKERS_FILE, NOT_PAIRED_CLADES_FILE,\
+    CODING_SEQUENCES_FILE, REDUCED_DB_FILE, NODES_STATS_FILE
 
 
 class DatabaseReducer:
@@ -68,10 +62,6 @@ class DatabaseReducer:
                     self.strainAssemblies[gbrs_paired_asm] = speciesTI
                     self.strainNames[organismName] = speciesTI
 
-        # manually add not existing assemblies
-        self.strainAssemblies['GCF_000219255'] = '1491'
-        self.strainAssemblies['GCF_000295795'] = '1225174'
-        self.strainAssemblies['GCF_000335395'] = '1262663'
         print("---Done.")
 
     def addToTaxonomyTree(self, TI, parentTI, taxName, rank):
@@ -144,7 +134,6 @@ class DatabaseReducer:
                                 self.markers[GI, position] = speciesTIs
 
                             else:
-                                # TODO: not paired clades
                                 f2.write(cladeName + "\n")
                                 speciesTIs = self.getTIsFromExt(ext)
 
@@ -197,6 +186,7 @@ class DatabaseReducer:
 
     @staticmethod
     def getAllChildNodes(taxNode):
+        SPECIES_RANK = "species"
         new_child_nodes = taxNode.children
         TIs = set()
 
@@ -204,7 +194,7 @@ class DatabaseReducer:
             child_nodes = new_child_nodes
             new_child_nodes = []
             for child in child_nodes:
-                if child.rank == "species":
+                if child.rank == SPECIES_RANK:
                     TIs.add(child.taxId)
                 new_child_nodes += child.children
 
@@ -212,8 +202,11 @@ class DatabaseReducer:
 
     @staticmethod
     def getSpecies(taxNode):
+        SPECIES_RANK = "species"
+        GENUS_RANK = "genus"
+
         # find children on species level
-        if taxNode.rank == "genus":
+        if taxNode.rank == GENUS_RANK:
             return DatabaseReducer.getAllChildNodes(taxNode)
 
         speciesTIs = set()
@@ -221,11 +214,11 @@ class DatabaseReducer:
         while len(notSpeciesNodes) > 0:
             newNotSpeciesNodes = []
             for node in notSpeciesNodes:
-                if node.rank == "genus":
+                if node.rank == GENUS_RANK:
                     speciesTIs.update(DatabaseReducer.getAllChildNodes(node))
                 elif node.hasChildren:
                     for child in node.children:
-                        if child.rank == "species":
+                        if child.rank == SPECIES_RANK:
                             speciesTIs.add(child.taxId)
                         else:
                             newNotSpeciesNodes.append(child)
@@ -245,8 +238,9 @@ class DatabaseReducer:
         # self.saveTaxNodes()
 
     def saveTaxNodes(self):
+        ROOT_TI = '1'
         with open(NODES_STATS_FILE, 'w') as ns:
-            node = self.taxNodes['1']
+            node = self.taxNodes[ROOT_TI]
             ns.write(node.taxId + " " + node.name + "\n")
             new_list = node.children
             counter = space_count = 1
