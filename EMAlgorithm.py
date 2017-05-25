@@ -116,6 +116,55 @@ class EMAlgorithm:
 
         return alignments
 
+    def EStep(self):
+        # expectation of parameters
+        h = [[0 for j in range(len(self.genomes))] for i in range(len(self.reads))]
+        h_sum = 0
+        for i in range(len(self.reads)):
+            for j in range(len(self.genomes)):
+                h[i][j] = self.pi_list[j] * pow(self.delta_list[j], 1 - self.y_list[i]) * self.q_list[i][j]
+                h_sum += h[i][j]
+
+        h = [[h[i][j] / h_sum for j in range(len(self.genomes))] for i in range(len(self.reads))]
+
+        return h, h_sum
+
+    def MStep(self, h, N):
+        # maximization of parameters
+        pi_list = list()
+        delta_list = list()
+        a_sum = sum(self.a_list)
+        b_sum = sum(self.b_list)
+
+        for j in range(len(self.genomes)):
+            h_j_sum_by_reads = 0
+            h_j_with_y_sum_by_reads = 0
+            y_sum = 0
+
+            for i in range(len(self.reads)):
+                h_j_sum_by_reads += h[i][j]
+                h_j_with_y_sum_by_reads += h[i][j] * (1 - self.y_list[i])
+                y_sum += 1 - self.y_list[i]
+
+            pi = self.calculatePi(h_j_sum_by_reads, self.a_list[j], a_sum, N)
+            pi_list.append(pi)
+
+            delta = self.calculateDelta(h_j_with_y_sum_by_reads, y_sum, self.b_list[j], b_sum)
+            delta_list.append(delta)
+
+        return pi_list, delta_list
+
+    def calculateLogLikelihood(self):
+        log_likelihood = 0
+
+        for i in range(len(self.reads)):
+            inner_sum = 0
+            for j in range(len(self.genomes)):
+                inner_sum += self.pi_list[j] * (pow(self.delta_list[j], 1 - self.y_list[i]) * self.q_list[i][j])
+            log_likelihood += math.log(inner_sum)
+
+        return log_likelihood
+
     def getBestTIsPerGroup(self, result):
         print("\nGetting the best TIs per group...")
         with open(NODES_FILE, 'r') as nodesFile:
@@ -223,55 +272,6 @@ class EMAlgorithm:
             print("     {:10}  {:>.8}".format(result[i][1], result[i][0]))
 
         return TIs
-
-    def EStep(self):
-        # expectation of parameters
-        h = [[0 for j in range(len(self.genomes))] for i in range(len(self.reads))]
-        h_sum = 0
-        for i in range(len(self.reads)):
-            for j in range(len(self.genomes)):
-                h[i][j] = self.pi_list[j] * pow(self.delta_list[j], 1 - self.y_list[i]) * self.q_list[i][j]
-                h_sum += h[i][j]
-
-        h = [[h[i][j] / h_sum for j in range(len(self.genomes))] for i in range(len(self.reads))]
-
-        return h, h_sum
-
-    def MStep(self, h, N):
-        # maximization of parameters
-        pi_list = list()
-        delta_list = list()
-        a_sum = sum(self.a_list)
-        b_sum = sum(self.b_list)
-
-        for j in range(len(self.genomes)):
-            h_j_sum_by_reads = 0
-            h_j_with_y_sum_by_reads = 0
-            y_sum = 0
-
-            for i in range(len(self.reads)):
-                h_j_sum_by_reads += h[i][j]
-                h_j_with_y_sum_by_reads += h[i][j] * (1 - self.y_list[i])
-                y_sum += 1 - self.y_list[i]
-
-            pi = self.calculatePi(h_j_sum_by_reads, self.a_list[j], a_sum, N)
-            pi_list.append(pi)
-
-            delta = self.calculateDelta(h_j_with_y_sum_by_reads, y_sum, self.b_list[j], b_sum)
-            delta_list.append(delta)
-
-        return pi_list, delta_list
-
-    def calculateLogLikelihood(self):
-        log_likelihood = 0
-
-        for i in range(len(self.reads)):
-            inner_sum = 0
-            for j in range(len(self.genomes)):
-                inner_sum += self.pi_list[j] * (pow(self.delta_list[j], 1 - self.y_list[i]) * self.q_list[i][j])
-            log_likelihood += math.log(inner_sum)
-
-        return log_likelihood
 
     @staticmethod
     def calculatePi(h_j_sum_by_R, a_j, a_sum, N):
