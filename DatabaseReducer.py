@@ -1,7 +1,7 @@
 import itertools
 import re
 
-from TaxonomyTree import TaxonomyTreeNode
+from TaxonomyTreeNode import TaxonomyTreeNode
 from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE, MARKERS_FILE, NOT_PAIRED_CLADES_FILE,\
     CODING_SEQUENCES_FILE, REDUCED_DB_FILE, NODES_STATS_FILE
 
@@ -12,7 +12,7 @@ class DatabaseReducer:
         self.taxIDFromName = {}     # key = taxName
         self.taxNodes = {}          # key = taxName
         self.strainAssemblies = {}  # key = assembly
-        self.strainNames = {}       # key = taxName
+        self.strainTIByName = {}    # key = taxName
         self.markers = {}           # key = GI, position
 
     def generate(self):
@@ -25,13 +25,16 @@ class DatabaseReducer:
     def parseTaxonomyNamesFile(self, taxonomyNamesFile):
         print("Preparing taxonomy names...")
 
+        SCIENTIFIC_NAME = "scientific name"
         with open(taxonomyNamesFile) as namesFile:
             for line in namesFile:
                 taxName = line.split('|')
                 TI = taxName[0].strip()
                 name = re.sub('[^0-9a-zA-Z]+', '_', taxName[1].strip())
-                self.taxonomyNames[TI] = name
                 self.taxIDFromName[name] = TI
+
+                if taxName[3].strip() == SCIENTIFIC_NAME and self.taxonomyNames.get(TI, None) is None:
+                    self.taxonomyNames[TI] = name
 
         print("---Done.")
 
@@ -60,7 +63,7 @@ class DatabaseReducer:
 
                     self.strainAssemblies[assembly] = speciesTI
                     self.strainAssemblies[gbrs_paired_asm] = speciesTI
-                    self.strainNames[organismName] = speciesTI
+                    self.strainTIByName[organismName] = speciesTI
 
         print("---Done.")
 
@@ -72,6 +75,8 @@ class DatabaseReducer:
 
         if TI in self.taxNodes:
             taxNode = self.taxNodes[TI]
+            if taxNode.parent is None:
+                taxNode.parent = parentNode
             if taxNode.rank is None or taxNode.rank == "no rank":
                 taxNode.rank = rank
         else:
@@ -128,7 +133,7 @@ class DatabaseReducer:
 
                         else:
                             # try with strain names
-                            TI = self.strainNames.get(cladeName, None)
+                            TI = self.strainTIByName.get(cladeName, None)
                             if TI is not None:
                                 speciesTIs = self.getTIsFromExt(ext) | {TI}
                                 self.markers[GI, position] = speciesTIs
@@ -146,7 +151,7 @@ class DatabaseReducer:
         self.printNodesStatistic()
 
         self.strainAssemblies.clear()
-        self.strainNames.clear()
+        self.strainTIByName.clear()
         self.taxNodes.clear()
         self.taxIDFromName.clear()
         print("---Done.")

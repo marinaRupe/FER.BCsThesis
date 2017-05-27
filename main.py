@@ -8,10 +8,10 @@ from res.ResourceFiles import REDUCED_DB_FILE
 if len(sys.argv) > 1:
     INPUT_FILE = str(sys.argv[1])
 else:
-    INPUT_FILE = aligFile.KLEBSIELLA_x1
+    INPUT_FILE = aligFile.SALMONELLA_x1
 
-reducedDb = Path(REDUCED_DB_FILE)
-if not reducedDb.is_file():
+reducedDbPath = Path(REDUCED_DB_FILE)
+if not reducedDbPath.is_file():
     DatabaseReducer().generate()
 
 ALIGNMENTS_FILE = ''.join(INPUT_FILE.split('.')[:-1]) + ".sam"

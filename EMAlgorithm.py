@@ -1,9 +1,12 @@
 import math
 from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE
+from DatabaseReducer import DatabaseReducer
+from TaxonomyTree import TaxonomyTree
 
 
 class EMAlgorithm:
     def __init__(self):
+        self.taxTree = TaxonomyTree()
         self.reads, self.genomes = [], []
         self.pi_list, self.delta_list = [], []
         self.a_list, self.b_list = [], []
@@ -13,6 +16,8 @@ class EMAlgorithm:
         self.parentTIs = {}    # key - TI (get parent TI by organism TI)
 
     def start(self, alignmentsFile):
+        self.taxTree.build()
+
         # First substep
         alignments = self.calculateInitialParameters(alignmentsFile)
         result = self.getResult()
@@ -167,32 +172,19 @@ class EMAlgorithm:
 
     def getBestTIsPerGroup(self, result):
         print("\nGetting the best TIs per group...")
-        with open(NODES_FILE, 'r') as nodesFile:
-            for line in nodesFile:
-                node = line.strip().split('\t|\t')
-                TI, parentTI = node[0].strip(), node[1].strip()
 
-                if TI in self.genomes:
-                    genome = [r[0] for r in result if r[1] == TI][0], TI
-                    self.groups.setdefault(parentTI, []).append(genome)
-                    self.parentTIs[TI] = parentTI
+        for TI in self.genomes:
+            genome = [r[0] for r in result if r[1] == TI][0], TI
+            parentTI = self.taxTree.taxNodes[TI].parent.taxId
+            groupGenome = self.groups.get(parentTI, (0, None))
 
-                # if parents are found for all TIs
-                if len(self.parentTIs) == len(self.genomes):
-                    break
+            if genome[0] > groupGenome[0]:
+                self.groups[parentTI] = genome
+                self.parentTIs[TI] = parentTI
 
         bestTIs = []
         for group in self.groups:
-            genomes = self.groups[group]
-            maxProp, maxTI = 0, None
-
-            for genome in genomes:
-                prop, TI = genome[0], genome[1]
-                if prop > maxProp:
-                    maxProp = prop
-                    maxTI = TI
-
-            bestTIs.append(maxTI)
+            bestTIs.append(self.groups[group][1])
 
         return bestTIs
 
@@ -230,42 +222,15 @@ class EMAlgorithm:
 
         return sorted(solution, reverse=True)
 
-    @staticmethod
-    def printResult(result):
+    def printResult(self, result):
         N = 5
-        SCIENTIFIC_NAME = "scientific name"
         NO_NAME = "(no name found)"
         names = [NO_NAME for i in range(N)]
         TIs = [genome[1] for genome in result[:N]]
 
-        with open(NAMES_FILE) as namesFile:
-            for line in namesFile:
-                taxName = line.split('|')
-                TI = taxName[0].strip()
-
-                if TI in TIs:
-                    if names[TIs.index(TI)] == NO_NAME:
-                        name = taxName[1].strip()
-                        isScientific = taxName[3].strip() == SCIENTIFIC_NAME
-                        if isScientific:
-                            names[TIs.index(TI)] = name
-
-                if NO_NAME not in names:
-                    break
-
-        if NO_NAME in names:
-            with open(STRAINS_ASSEMBLY_FILE) as aFile:
-                for line in aFile:
-                    if not line.startswith('#'):
-                        data = line.split('\t')
-                        TI, organismName = data[6].strip(), data[7].strip()
-
-                        if TI in TIs:
-                            if names[TIs.index(TI)] == NO_NAME:
-                                names[TIs.index(TI)] = organismName
-
-                    if NO_NAME not in names:
-                        break
+        for TI in TIs:
+            if names[TIs.index(TI)] == NO_NAME:
+                names[TIs.index(TI)] = self.taxTree.taxonomyNames.get(TI, None)
 
         for i in range(N):
             print("{}. {}".format(i + 1, names[i]))
