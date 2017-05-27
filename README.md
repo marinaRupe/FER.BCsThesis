@@ -3,5 +3,7 @@ Bioinformatics project for my BCs Thesis @ FER, University of Zagreb (2016/2017)
 
 Link to a course site: http://www.fer.unizg.hr/en/course/bscthe
 
-* written in Python
+* written in Python 3.5
+* analysis of metagenomic samples obtained by Nanopore-based sequencing technology
+* uses graphmap for mapping reads (https://github.com/isovic/graphmap)
 * uses the EM algorithm to identify the species present in a sample
