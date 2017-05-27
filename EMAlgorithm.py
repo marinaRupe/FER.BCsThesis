@@ -1,7 +1,7 @@
 import math
-from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE
-from DatabaseReducer import DatabaseReducer
 from TaxonomyTree import TaxonomyTree
+from threading import Thread
+from multiprocessing import Process
 
 
 class EMAlgorithm:
@@ -16,11 +16,13 @@ class EMAlgorithm:
         self.parentTIs = {}    # key - TI (get parent TI by organism TI)
 
     def start(self, alignmentsFile):
-        self.taxTree.build()
+        taxTreeThread = Thread(target=self.taxTree.build)
+        taxTreeThread.start()
 
         # First substep
         alignments = self.calculateInitialParameters(alignmentsFile)
         result = self.getResult()
+        taxTreeThread.join()
         print("\nFirst result:\n")
         self.printResult(result)
         bestTIs = self.getBestTIsPerGroup(result)

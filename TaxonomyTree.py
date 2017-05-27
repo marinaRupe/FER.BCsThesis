@@ -1,5 +1,5 @@
-import re
-from res.ResourceFiles import NAMES_FILE, NODES_FILE, STRAINS_ASSEMBLY_FILE
+from re import sub
+from res.ResourceFiles import NAMES_FILE, NODES_FILE, NODES_STATS_FILE
 from TaxonomyTreeNode import TaxonomyTreeNode
 
 
@@ -24,7 +24,12 @@ class TaxonomyTree:
             for line in namesFile:
                 taxName = line.split('|')
                 TI = taxName[0].strip()
-                name = re.sub('[^0-9a-zA-Z]+', '_', taxName[1].strip())
+
+                if self.databaseMode:
+                    name = sub('[^0-9a-zA-Z]+', '_', taxName[1].strip())
+                else:
+                    name = taxName[1].strip()
+
                 self.taxIDFromName[name] = TI
 
                 if taxName[3].strip() == SCIENTIFIC_NAME and self.taxonomyNames.get(TI, None) is None:
@@ -63,3 +68,31 @@ class TaxonomyTree:
         parentNode.addChild(taxNode)
         self.taxNodes[parentTI] = parentNode
         self.taxNodes[TI] = taxNode
+
+    def taxIdHasName(self, taxId):
+        name = self.taxonomyNames.get(taxId, None)
+        return name is not None
+
+    # print statistics
+    def printNodesStatistic(self):
+        print("\t\tNames count: " + str(len(self.taxonomyNames)))
+        print("\t\tNodes count: " + str(len(self.taxNodes)))
+        print("\t\tNames without nodes: " + str(len(self.taxonomyNames) - len(self.taxNodes)))
+
+    def saveTaxNodes(self):
+        ROOT_TI = '1'
+        with open(NODES_STATS_FILE, 'w') as ns:
+            node = self.taxNodes[ROOT_TI]
+            ns.write(node.taxId + " " + node.name + "\n")
+            new_list = node.children
+            counter = space_count = 1
+            while new_list:
+                old_list = new_list
+                new_list = []
+                for child in old_list:
+                    space = " " * space_count
+                    ns.write(space + child.taxId + " " + child.name + " (" + child.rank + ")" + "\n")
+                    new_list += child.children
+                    counter += 1
+                space_count += 1
+            print("\t\tChildren counter (from organism with TI 1): ", counter)
